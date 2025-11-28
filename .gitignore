@@ -1,6 +1,10 @@
 filtered_games.ndjson
 game_list.json
 new_game_dump.ndjson
+filtered_games.json
+rated_games.json
+rated_games.ndjson
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
