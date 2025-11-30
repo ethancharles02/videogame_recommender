@@ -2,7 +2,7 @@ import requests
 import json
 import time
 
-def get_json_from_url(url):
+def get_json_from_url(url) -> dict:
     success = False
     while not success:
         try:
@@ -23,7 +23,7 @@ def write_json_to_file(filename, json_dict):
             f.write(json.dumps(item))
             f.write("\n")
 
-def load_ndjson_file(filename):
+def load_ndjson_file(filename) -> list:
     apps_dump_data = []
     with open(filename, "r") as f:
         for line in f:
@@ -34,7 +34,7 @@ def load_ndjson_file(filename):
             apps_dump_data.append(obj)
     return apps_dump_data
 
-def load_json_file(filename: str):
+def load_json_file(filename: str) -> dict:
     with open(filename, "r") as f:
         json_dict = json.load(f)
 
@@ -51,5 +51,5 @@ def convert_ndjson_to_json(read_filename: str, write_filename: str):
         json.dump(json_dict, f)
 
 if __name__ == "__main__":
-    convert_ndjson_to_json("filtered_games.ndjson", "filtered_games.json")
-    # convert_ndjson_to_json("rated_games.ndjson", "rated_games.json")
+    # convert_ndjson_to_json("filtered_games.ndjson", "filtered_games.json")
+    convert_ndjson_to_json("rated_games.ndjson", "rated_games.json")
