@@ -6,7 +6,7 @@ from enum import Enum
 from random import choice
 from tkhtmlview import HTMLScrolledText, HTMLLabel
 
-from data_collection import load_json_file
+from .data_collection import load_json_file
 
 def load_image_from_url(url: str) -> ImageTk.PhotoImage:
     try:
@@ -27,7 +27,7 @@ class GameRecommendationStatus(Enum):
     NotPlayed = 1
 
 class VideoGameRecommender:
-    def __init__(self, games: dict, game_data: dict, image_label: tk.Label, description_label: HTMLScrolledText, genre_label: HTMLLabel):
+    def __init__(self, root: tk.Tk, games: dict, game_data: dict, image_label: tk.Label, description_label: HTMLScrolledText, genre_label: HTMLLabel):
         self.game_dict = {}
         self.current_game_id = None
         self.games = games
@@ -72,7 +72,7 @@ class VideoGameRecommender:
         self.game_dict[self.current_game_id] = (status, slider.get())
         self.get_new_game()
 
-if __name__ == "__main__":
+def run_recommender():
     # Get the data for emotional ratings
     ratings_filename = "rated_games.json"
     rating_data = load_json_file(ratings_filename)
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     description_label.grid(row=2, column=0, columnspan=4, padx=5, pady=5, sticky="nsew")
 
     # Initialize the recommender and get a new recommendation
-    recommender = VideoGameRecommender(rating_data, game_data, image_label, description_label, genre_label)
+    recommender = VideoGameRecommender(root, rating_data, game_data, image_label, description_label, genre_label)
     recommender.get_new_game()
 
     button_row = 3

@@ -17,11 +17,15 @@ def get_json_from_url(url) -> dict:
             print(f"Error decoding JSON from {url}: {e}")
         time.sleep(5)
 
-def write_json_to_file(filename, json_dict):
+def write_ndjson_to_file(filename: str, json_list: list):
     with open(filename, "a") as f:
-        for item in json_dict:
+        for item in json_list:
             f.write(json.dumps(item))
             f.write("\n")
+
+def write_json_to_file(filename: str, json_dict: dict):
+    with open(filename, "w") as f:
+        json.dump(json_dict, f)
 
 def load_ndjson_file(filename) -> list:
     apps_dump_data = []

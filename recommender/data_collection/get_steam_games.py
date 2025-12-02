@@ -2,7 +2,7 @@ import json
 import os
 import time
 
-from .json_utils import load_ndjson_file, get_json_from_url, write_json_to_file
+from .json_utils import load_ndjson_file, get_json_from_url, write_ndjson_to_file
 
 if __name__ == "__main__":
     # steam_game_data = get_json_from_url("http://api.steampowered.com/ISteamApps/GetAppList/v0002/?format=json")
@@ -49,11 +49,11 @@ if __name__ == "__main__":
             num_downloads = adjusted_i + 1
             if num_downloads % num_downloads_till_update == 0:
                 print(f"Updating game data at {num_downloads} downloads")
-                write_json_to_file(game_dump_filename, apps_data)
+                write_ndjson_to_file(game_dump_filename, apps_data)
                 apps_data.clear()
 
         time.sleep(rate_limit)
         time_elapsed_since_update += rate_limit
 
     # Get previous dump to add to it
-    write_json_to_file(game_dump_filename, apps_data)
+    write_ndjson_to_file(game_dump_filename, apps_data)
