@@ -8,7 +8,25 @@ from .data_collection import load_json_file, write_json_to_file
 from .recommender import load_image_from_url
 
 class RatingRater:
-    def __init__(self, root: tk.Tk, analyzed_game_data: dict, game_data: dict, image_label: tk.Label, description_label: HTMLScrolledText, rating_label: HTMLLabel):
+    def __init__(self,
+                 root: tk.Tk,
+                 analyzed_game_data: dict,
+                 game_data: dict,
+                 image_label: tk.Label,
+                 description_label: HTMLScrolledText,
+                 rating_label: HTMLLabel):
+        """Rating rater for use in getting human ratings for the model emotional
+        analysis ratings
+
+        Arguments:
+            root {tk.Tk} -- Tk root object
+            analyzed_game_data {dict} -- Game data that has the model emotional
+                ratings
+            game_data {dict} -- Game data the contains general game information
+            image_label {tk.Label} -- Image label to update
+            description_label {HTMLScrolledText} -- Description label to update
+            rating_label {HTMLLabel} -- Rating label to update
+        """
         self.game_dict = {}
         self.current_game_id = None
         self.analyzed_game_data = analyzed_game_data
@@ -20,40 +38,50 @@ class RatingRater:
         self.rating_label = rating_label
 
     def get_new_game(self):
+        """Gets a new game from the available list and updates the UI for it
+        """
         self.current_game_id = choice(self.game_ids)
         self.game_ids.remove(self.current_game_id)
         current_game_data = self.game_data[self.current_game_id]["data"]
         image_url = current_game_data["header_image"]
 
         photo = load_image_from_url(image_url)
-        self.update_image(photo)
-
-        description = current_game_data["detailed_description"]
-        self.update_description(description)
-
-        rating_str = str(self.analyzed_game_data[self.current_game_id])
-        self.update_ratings(f"{rating_str}")
-
-    def update_image(self, photo: ImageTk.PhotoImage):
         self.image_label.configure(image=photo)
         self.image_label.image = photo
 
-    def update_description(self, description: str):
+        description = current_game_data["detailed_description"]
         self.description_label.set_html(description)
 
-    def update_ratings(self, ratings: str):
-        self.rating_label.set_html(ratings)
+        rating_str = str(self.analyzed_game_data[self.current_game_id])
+        self.rating_label.set_html(rating_str)
 
     def submit(self, slider: tk.Scale, num_games_rated_label: tk.Label):
+        """Submits the human rating for the model given rating
+
+        Arguments:
+            slider {tk.Scale} -- Scale to get value from
+            num_games_rated_label {tk.Label} -- Label to update for number of
+                games rated
+        """
         self.game_dict[self.current_game_id] = slider.get()
         num_games_rated_label.configure(text=len(self.game_dict.keys()))
         self.get_new_game()
 
     def load(self, filename: str):
+        """Loads a saved file of ratings to the game dictionary
+
+        Arguments:
+            filename {str} -- File to load
+        """
         if os.path.exists(filename):
             self.game_dict = load_json_file(filename)
 
     def save(self, filename: str):
+        """Saves current human ratings to a file
+
+        Arguments:
+            filename {str} -- File to save to
+        """
         write_json_to_file(filename, self.game_dict)
 
 def run_rating_rater():

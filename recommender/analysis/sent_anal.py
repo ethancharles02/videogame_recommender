@@ -5,6 +5,9 @@ from models.gpt_model import GptAnalyisModel
 import numpy as np
 
 class IncorrectReturnTypes(Enum):
+    """Represents the different types of errors that could come about from the
+    model doing sentiment analysis
+    """
     DecodeError = 0
     NoReturn = 1
     IncorrectContent = 2
@@ -13,6 +16,9 @@ class IncorrectReturnTypes(Enum):
     IncorrectValueRange = 5
 
 class IncorrectReturnDetails:
+    """The details for an incorrect return. It holds the type of error and a
+    message to go with it
+    """
     def __init__(self, type: IncorrectReturnTypes, message: str):
         self.type = type
         self.message = message
@@ -27,13 +33,26 @@ expected_emotions = [
 ]
 
 def check_response_content(response_dict: dict) -> dict|IncorrectReturnDetails:
+    """Checks the content of a response to make sure it is all formatted
+    correctly
+
+    Arguments:
+        response_dict {dict} -- Response dictionary with emotions and values
+
+    Returns:
+        dict|IncorrectReturnDetails -- Either the dictionary back or details on
+            what was wrong
+    """
+    # Checks for correct number of emotions
     if len(response_dict.keys()) != len(expected_emotions):
         return IncorrectReturnDetails(IncorrectReturnTypes.IncorrectNumEmotions, f"The model returned the incorrect number of emotions. Correct emotions are {', '.join(expected_emotions)}")
 
+    # Makes sure all emotions are included
     for emotion in expected_emotions:
         if emotion not in response_dict:
             return IncorrectReturnDetails(IncorrectReturnTypes.IncorrectEmotions, f"The model returned incorrect emotions. Emotion was {emotion}. Correct emotions are {', '.join(expected_emotions)}")
 
+    # Makes sure values are within the expected range
     for val in response_dict.values():
         if not (1 <= val <= 10):
             return IncorrectReturnDetails(IncorrectReturnTypes.IncorrectValueRange, f"The model returned an emotion value outside the range of 1-10. Value was {val}. It must return a value between 1 and 10 inclusive")
@@ -41,25 +60,48 @@ def check_response_content(response_dict: dict) -> dict|IncorrectReturnDetails:
     return response_dict
 
 def check_response_format(response: str) -> dict|IncorrectReturnDetails:
+    """Checks a response string to make sure it is formatted correctly
+
+    Arguments:
+        response {str} -- Response to check
+
+    Returns:
+        dict|IncorrectReturnDetails -- Either dictionary or details about errors
+    """
+    # Means that the model decided the content should not be analyzed
     if response == "None":
         return IncorrectReturnDetails(IncorrectReturnTypes.NoReturn, "Model returned None")
+
+    # Attempt to load the response as as dictionary
     try:
         response_dict = json.loads(response)
     except json.decoder.JSONDecodeError as e:
         print(str(e))
         return IncorrectReturnDetails(IncorrectReturnTypes.DecodeError, "Model returned an invalid formatted json response")
 
+    # Check the content itself for correct formatting
     correct_content = check_response_content(response_dict)
 
     return correct_content
 
 def save_results(results: list, filename: str):
+    """Saves the results to the given filename as an ndjson file
+
+    Arguments:
+        results {list} -- Results to save
+        filename {str} -- Filename to save to
+    """
     with open(filename, "a") as f:
         for game in results:
             f.write(json.dumps(game))
             f.write("\n")
 
 def perform_sentiment_analysis(model: AnalysisModel):
+    """Performs analysis with the given model
+
+    Arguments:
+        model {AnalysisModel} -- Model to use
+    """
     prompt_format = \
 """ You will be given a text document to perform sentiment analysis on.
 It will be 6 class analysis on the following emotions:
@@ -94,19 +136,26 @@ sentiment analysis. Here is the text document:"""
     num_games = len(games)
 
     results = []
+    # Go through each game and send the analysis request for it
     for i, game in enumerate(games):
         key_list = list(game.keys())
         id = key_list[0]
         game_data = game[id]["data"]
+
+        # Get the description for the game
         if "detailed_description" not in game_data:
             print(f"No description found for this game: {game_data}")
             return None
         description = game_data["detailed_description"]
+
+        # Format and send the description to the model
         query = f"{prompt_format}\n{description}"
         response = model.send_query(query)
 
+        # Make sure the response is formatted correctly
         response = check_response_format(response)
         attempt_count = 1
+        # Will allow the model to attempt analysis 3 times before failing out
         while isinstance(response, IncorrectReturnDetails):
             # If the model decided to not rate the mode, skip
             if response.type == IncorrectReturnTypes.NoReturn:
@@ -117,16 +166,19 @@ sentiment analysis. Here is the text document:"""
             if attempt_count > 3:
                 raise Exception(f"The model failed multiple times to give a correctly formatted rating. Game Description: {description}\n\nQuery: {query}\n\nResult Info: {response.type}, {response.message}")
 
+        # In the event that the model decided not to analyze the description
         if isinstance(response, IncorrectReturnDetails) and response.type == IncorrectReturnTypes.NoReturn:
             pass
         else:
             results.append({id : response})
 
+        # Save the results every set number of requests
         if i % save_per_num_games == save_per_num_games - 1:
             print("Saving Games")
             save_results(results, save_filename)
             results.clear()
 
+        # Log results every set number of requests
         if i % log_per_num_games == log_per_num_games - 1:
             print(f"Games Rated: {i}/{num_games} ({(i/num_games):.2%})", end="\r")
 

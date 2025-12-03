@@ -1,6 +1,14 @@
 import json
 
-def get_genres(games: list):
+def get_genres(games: list) -> set[str]:
+    """Gets all genres from a games list
+
+    Arguments:
+        games {list} -- Games to pull genres from
+
+    Returns:
+        set[str] -- ~ delimited string for genre id and genre description
+    """
     genres = set()
     for game in games:
         key_list = list(game.keys())
@@ -13,7 +21,15 @@ def get_genres(games: list):
                     genres.add(f"{genre['id']}~{genre['description']}")
     return genres
 
-def get_types(games: list):
+def get_types(games: list) -> set[str]:
+    """Gets all types from a games list
+
+    Arguments:
+        games {list} -- Games to pull types from
+
+    Returns:
+        set[str] -- Set of types
+    """
     types = set()
     for game in games:
         key_list = list(game.keys())
@@ -32,7 +48,7 @@ if __name__ == "__main__":
         # games = [json.loads(line) for line in f.readlines(num_to_grab)]
         for line in f:
             games.append(json.loads(line))
-    
+
     # Banned ids = 71 (Sexual content), 72 (Nudity)
     banned_genre_ids = ["71", "72"]
     min_required_recommendations = 10000
@@ -62,13 +78,13 @@ if __name__ == "__main__":
                         break
         else:
             banned_indices.append(i)
-    
+
     num_indices = len(banned_indices)
     print(num_indices)
     banned_indices.reverse()
     for i in banned_indices:
         games.pop(i)
-    
+
     new_filename = "filtered_games.ndjson"
     with open(new_filename, "w") as f:
         for game in games:
