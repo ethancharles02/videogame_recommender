@@ -224,7 +224,7 @@ class UserProfile:
             str -- Game ID
         """
         num_recommendations = len(recommendation_list)
-        indice = 0 if not is_exploratory else randint(0, num_recommendations // 5)
+        indice = 0 if not is_exploratory else randint(0, num_recommendations // 30)
 
         return recommendation_list[indice][0]
 
