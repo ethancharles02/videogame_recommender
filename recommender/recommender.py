@@ -1,11 +1,12 @@
 from enum import Enum
 from io import BytesIO
 from PIL import Image, ImageTk
-from random import choice
+from random import choice, randint
 from tkhtmlview import HTMLScrolledText, HTMLLabel
 import os
 import tkinter as tk
 import urllib.request
+import numpy as np
 
 from .data_collection import load_json_file, write_json_to_file
 
@@ -23,6 +24,26 @@ def load_image_from_url(root: tk.Tk, url: str) -> ImageTk.PhotoImage:
     photo = ImageTk.PhotoImage(im)
     return photo
 
+sentiment_order = ["anger", "disgust", "fear", "happiness", "sadness", "surprise"]
+def get_sentiment_vector(sentiment_dict: dict) -> np.ndarray:
+    vec = np.zeros(shape=(1, len(sentiment_order)))
+    for i in range(len(sentiment_order)):
+        vec[i] = sentiment_dict[sentiment_order[i]]
+
+    return vec
+
+def get_sentiment_matrix(analyzed_game_data: dict) -> tuple[list[str], dict[str, int], np.ndarray]:
+    game_id_list = list(analyzed_game_data.keys())
+    # Lookup dict for id to index in the matrix
+    sentiment_ids = {}
+    num_games = len(game_id_list)
+    sentiment_matrix = np.zeros(shape=(num_games, len(sentiment_order)))
+    for y in range(num_games):
+        sentiment_ids[game_id_list[y]] = y
+        for x in range(len(sentiment_order)):
+            sentiment_matrix[y][x] = analyzed_game_data[game_id_list[y]][sentiment_order[x]]
+
+    return game_id_list, sentiment_ids, sentiment_matrix
 class GameRecommendationStatus(int, Enum):
     Played = 0
     NotPlayed = 1
@@ -87,6 +108,61 @@ class UserProfile:
 
         write_json_to_file(filename, self._game_ratings)
 
+    def get_recommendation(self, game_ids: list[str], sentiment_indices: dict[str, int], sentiment_matrix: np.ndarray):
+        recommendation_list = self._generate_recommendation_list(game_ids, sentiment_indices, sentiment_matrix)
+        id = self._select_from_recommendation_list(recommendation_list, True)
+        if id == -1:
+            raise Exception("No valid game recommendation found")
+        return id
+
+    def _select_from_recommendation_list(self, recommendation_list: list[tuple[str, float]], is_exploratory: bool):
+        num_recommendations = len(recommendation_list)
+        indice = 0 if not is_exploratory else randint(0, num_recommendations // 5)
+
+        return recommendation_list[indice][0]
+
+    def _generate_recommendation_list(self, game_ids: list[str], sentiment_indices: dict[str, int], sentiment_matrix: np.ndarray) -> list[tuple[str, float]]:
+        recommendation_pool = {}
+
+        for rated_id in self._game_ratings.keys():
+            rec_status, rating = self._game_ratings[rated_id]
+            has_played_modifier = 10 if rec_status == GameRecommendationStatus.Played else 1
+
+            # Gets the row for the given vector
+            rated_vector = sentiment_matrix[sentiment_indices[rated_id]]
+            similarities_vector = sentiment_matrix.dot(rated_vector) / (np.linalg.norm(sentiment_matrix, axis=1) * np.linalg.norm(rated_vector))
+
+            # Sort them based on most similar
+            top_similarities = np.argsort(similarities_vector)[::-1]
+            sorted_ids = np.array(game_ids)[top_similarities]
+            sorted_sims = similarities_vector[top_similarities]
+
+            # Remove the existing game and get top 5 entries
+            mask = (sorted_ids != rated_id) & (~np.isin(sorted_ids, list(self.rated_games)))
+            filtered_ids = sorted_ids[mask]
+            filtered_sims = sorted_sims[mask]
+
+            # num_games_to_add = 5 if len(filtered_ids) >= 5 else len(filtered_ids)
+            num_games_to_add = len(filtered_ids)
+            for i in range(num_games_to_add):
+                game_id = filtered_ids[i]
+                # Sets a score for the game based on how similar it it, how much
+                # the user liked it, and if they played it or not. The rating is
+                # adjusted such that 4 or below becomes negative and detracts
+                # from the overall score
+                score = filtered_sims[i] * (rating - 5) * has_played_modifier
+                if game_id in recommendation_pool:
+                    recommendation_pool[game_id] += score
+                else:
+                    recommendation_pool[game_id] = score
+
+        recommendation_list = []
+        for key in recommendation_pool.keys():
+            recommendation_list.append((key, recommendation_pool[key]))
+
+        recommendation_list.sort(key=lambda val: val[1], reverse=True)
+        return recommendation_list
+
     @property
     def name(self):
         return self._name
@@ -96,18 +172,32 @@ class UserProfile:
         self._name = value
         self.default_filename = self._get_default_filename()
 
+# Optimally, the UI elements would be separated into a different class like
+# VideoGameRecommenderUI and that would handle all tk calls and formatting
 class VideoGameRecommender:
-    def __init__(self, root: tk.Tk, games: dict, game_data: dict, game_label: tk.Label, image_label: tk.Label, description_label: HTMLScrolledText, genre_label: HTMLLabel, users: dict[str, UserProfile] = {}):
+    def __init__(self, root: tk.Tk,
+                 analyzed_game_data: dict,
+                 game_data: dict,
+                 game_label: tk.Label,
+                 image_label: tk.Label,
+                 rating_label: HTMLLabel,
+                 description_label: HTMLScrolledText,
+                 genre_label: HTMLLabel,
+                 users: dict[str, UserProfile] = {},
+                 display_ratings: bool = False):
         self.root = root
-        self.games = games
+        self.analyzed_game_data = analyzed_game_data
+        self.game_id_list, self.sentiment_indices, self.sentiment_matrix = get_sentiment_matrix(self.analyzed_game_data)
         self.game_data = game_data
         self.game_label = game_label
         self.image_label = image_label
+        self.rating_label = rating_label
         self.description_label = description_label
         self.genre_label = genre_label
         self.current_game_id = None
-        self.game_ids: set = set(games.keys())
+        self.game_ids: set = set(analyzed_game_data.keys())
         self.users: dict[str, UserProfile] = users
+        self.display_ratings = display_ratings
 
         # Add a default user if one isn't found
         names = list(self.users.keys())
@@ -128,12 +218,16 @@ class VideoGameRecommender:
         # In the event the game was skipped, still add it to the rated games so
         # it doesn't show up again. (It will still show up in future reloads of
         # the recommender)
-        if self.current_game_id not in self.current_user.rated_games:
+        if self.current_game_id is not None and self.current_game_id not in self.current_user.rated_games:
             self.current_user.rated_games.add(self.current_game_id)
 
-        available_ids = self.game_ids.difference(self.current_user.rated_games)
+        if len(self.current_user.rated_games) < 1:
+        # if len(self.current_user.rated_games) < 5:
+            available_ids = list(self.game_ids.difference(self.current_user.rated_games))
+            self.current_game_id = choice(available_ids)
+        else:
+            self.current_game_id = self.current_user.get_recommendation(self.game_id_list, self.sentiment_indices, self.sentiment_matrix)
 
-        self.current_game_id = choice(list(available_ids))
         current_game_data = self.game_data[self.current_game_id]["data"]
         image_url = current_game_data["header_image"]
 
@@ -141,6 +235,10 @@ class VideoGameRecommender:
 
         photo = load_image_from_url(self.root, image_url)
         self.update_image(photo)
+
+        if self.display_ratings:
+            rating_str = str(self.analyzed_game_data[self.current_game_id])
+            self.update_ratings(f"{rating_str}")
 
         description = current_game_data["detailed_description"]
         self.update_description(description)
@@ -155,6 +253,9 @@ class VideoGameRecommender:
     def update_image(self, photo: ImageTk.PhotoImage):
         self.image_label.configure(image=photo)
         self.image_label.image = photo
+
+    def update_ratings(self, ratings: str):
+        self.rating_label.set_html(ratings)
 
     def update_description(self, description: str):
         self.description_label.set_html(description)
@@ -173,6 +274,7 @@ class VideoGameRecommender:
 
 def run_recommender():
     # Get the data for emotional ratings
+    # ratings_filename = "temp_rated_games.json"
     ratings_filename = "rated_games.json"
     rating_data = load_json_file(ratings_filename)
 
@@ -192,6 +294,7 @@ def run_recommender():
     root.rowconfigure(5, weight=0)
     root.rowconfigure(6, weight=0)
     root.rowconfigure(7, weight=0)
+    root.rowconfigure(8, weight=0)
     for i in range(4):
         root.columnconfigure(i, weight=1)
 
@@ -203,21 +306,26 @@ def run_recommender():
     image_label = tk.Label(root)
     image_label.grid(row=1, column=0, columnspan=4, padx=5, pady=5, sticky="nsew")
 
+    # Ratings listed for the game
+    rating_label = HTMLLabel(root)
+    rating_label.grid(row=2, column=0, columnspan=4, padx=5, pady=5, sticky="w")
+    rating_label.configure(height=2)
+
     # Genres listed for the game
     genre_label = HTMLLabel(root)
-    genre_label.grid(row=2, column=0, columnspan=4, padx=5, pady=5, sticky="w")
+    genre_label.grid(row=3, column=0, columnspan=4, padx=5, pady=5, sticky="w")
     genre_label.configure(height=2)
 
     # Description of the game
     description_label = HTMLScrolledText(root)
     description_label.configure(state="disabled")
-    description_label.grid(row=3, column=0, columnspan=4, padx=5, pady=5, sticky="nsew")
+    description_label.grid(row=4, column=0, columnspan=4, padx=5, pady=5, sticky="nsew")
 
     # Initialize the recommender and get a new recommendation
-    recommender = VideoGameRecommender(root, rating_data, game_data, game_label, image_label, description_label, genre_label)
+    recommender = VideoGameRecommender(root, rating_data, game_data, game_label, image_label, rating_label, description_label, genre_label, display_ratings=False)
     recommender.get_new_game()
 
-    button_row = 4
+    button_row = 5
     # Button used to indicate if the user has played the game before
     played_btn = tk.Button(root, text="I Have Played This Game")
     played_btn.configure(command=lambda b=played_btn: recommender.toggle(b))

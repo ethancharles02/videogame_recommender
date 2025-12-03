@@ -8,16 +8,16 @@ from .data_collection import load_json_file, write_json_to_file
 from .recommender import load_image_from_url
 
 class RatingRater:
-    def __init__(self, root: tk.Tk, games: dict, game_data: dict, image_label: tk.Label, description_label: HTMLScrolledText, genre_label: HTMLLabel):
+    def __init__(self, root: tk.Tk, analyzed_game_data: dict, game_data: dict, image_label: tk.Label, description_label: HTMLScrolledText, rating_label: HTMLLabel):
         self.game_dict = {}
         self.current_game_id = None
-        self.games = games
+        self.analyzed_game_data = analyzed_game_data
         self.game_data = game_data
-        self.game_ids = list(games.keys())
+        self.game_ids = list(analyzed_game_data.keys())
         self.root = root
         self.image_label = image_label
         self.description_label = description_label
-        self.rating_label = genre_label
+        self.rating_label = rating_label
 
     def get_new_game(self):
         self.current_game_id = choice(self.game_ids)
@@ -31,7 +31,7 @@ class RatingRater:
         description = current_game_data["detailed_description"]
         self.update_description(description)
 
-        rating_str = str(self.games[self.current_game_id])
+        rating_str = str(self.analyzed_game_data[self.current_game_id])
         self.update_ratings(f"{rating_str}")
 
     def update_image(self, photo: ImageTk.PhotoImage):
@@ -86,10 +86,10 @@ def run_rating_rater():
     image_label = tk.Label(root)
     image_label.grid(row=1, column=0, columnspan=4, padx=5, pady=5, sticky="nsew")
 
-    # Genres listed for the game
-    genre_label = HTMLLabel(root)
-    genre_label.grid(row=2, column=0, columnspan=4, padx=5, pady=5, sticky="w")
-    genre_label.configure(height=2)
+    # Ratings listed for the game
+    rating_label = HTMLLabel(root)
+    rating_label.grid(row=2, column=0, columnspan=4, padx=5, pady=5, sticky="w")
+    rating_label.configure(height=2)
 
     # Description of the game
     description_label = HTMLScrolledText(root)
@@ -98,7 +98,7 @@ def run_rating_rater():
 
     ratings_filename = "rating_ratings.json"
     # Initialize the recommender and get a new recommendation
-    rater = RatingRater(root, rating_data, game_data, image_label, description_label, genre_label)
+    rater = RatingRater(root, rating_data, game_data, image_label, description_label, rating_label)
     rater.load(ratings_filename)
     rater.get_new_game()
 
