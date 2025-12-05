@@ -242,6 +242,9 @@ class UserProfile:
             list[tuple[str, float]] -- Sorted list of Game IDs and Scores
         """
         recommendation_pool = {}
+        for rated_id in self._game_ratings.keys():
+            if rated_id not in self.rated_games:
+                recommendation_pool[rated_id] = 0
 
         for rated_id in self._game_ratings.keys():
             rec_status, rating = self._game_ratings[rated_id]
@@ -264,7 +267,10 @@ class UserProfile:
             filtered_sims = sorted_sims[mask]
 
             # Add scores for all the games
-            num_games_to_add = len(filtered_ids)
+            # num_games_to_add = len(filtered_ids)
+            # Add scores for just the top # of similar games
+            temp_num_games_to_add = 100
+            num_games_to_add = temp_num_games_to_add if len(filtered_ids) >= temp_num_games_to_add else len(filtered_ids)
             for i in range(num_games_to_add):
                 game_id = filtered_ids[i]
                 # Sets a score for the game based on how similar it it, how much
@@ -371,6 +377,7 @@ class VideoGameRecommender:
             self.current_game_id = choice(available_ids)
         else:
             self.current_game_id = self.current_user.get_recommendation(self.game_id_list, self.sentiment_indices, self.sentiment_matrix)
+        # self.current_game_id = "48000"
 
         current_game_data = self.game_data[self.current_game_id]["data"]
         image_url = current_game_data["header_image"]

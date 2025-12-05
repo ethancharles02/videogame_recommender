@@ -1,2 +1,3 @@
-from analysis.models.analysis_model import AnalysisModel
-from analysis.models.gpt_model import GptAnalyisModel
+from .models.analysis_model import AnalysisModel
+from .models.gpt_model import GptAnalyisModel
+from .rating_analysis import main as main_rating_analysis
